@@ -18,23 +18,31 @@ pub fn part_three(notes: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ec::ec::runner::Answer;
     use ec::read_example_file;
+    use pretty_assertions::assert_eq;
 
     #[test]
+    #[ignore]
     fn test_part_one() {
-        let result = part_one(&read_example_file(EVENT, QUEST, 1));
-        assert_eq!(result, None);
+        let notes = read_example_file(EVENT, QUEST, 1);
+        let result = part_one(&notes).unpack().unwrap();
+        assert_eq!(result, "");
     }
 
     #[test]
+    #[ignore]
     fn test_part_two() {
-        let result = part_two(&read_example_file(EVENT, QUEST, 2));
-        assert_eq!(result, None);
+        let notes = read_example_file(EVENT, QUEST, 2);
+        let result = part_two(&notes).unpack().unwrap();
+        assert_eq!(result, "");
     }
 
     #[test]
+    #[ignore]
     fn test_part_three() {
-        let result = part_three(&read_example_file(EVENT, QUEST, 3));
-        assert_eq!(result, None);
+        let notes = read_example_file(EVENT, QUEST, 3);
+        let result = part_three(&notes).unpack().unwrap();
+        assert_eq!(result, "");
     }
 }

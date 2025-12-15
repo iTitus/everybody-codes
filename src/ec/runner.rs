@@ -1,7 +1,7 @@
 use crate::ec::Event;
 use crate::{Client, Quest};
 use std::env;
-use std::fmt::Display;
+use std::fmt::{Debug, Display};
 use std::time::Instant;
 
 pub const ANSI_BOLD: &str = "\x1b[1m";
@@ -9,13 +9,16 @@ pub const ANSI_RESET: &str = "\x1b[0m";
 pub const ANSI_GREEN: &str = "\x1b[32m";
 pub const ANSI_RED: &str = "\x1b[31m";
 
-pub fn run_part<T: Display>(
-    func: impl FnOnce(&str) -> Option<T>,
-    input: &str,
+pub fn run_part<'a, A: Answer + Sized>(
+    func: impl FnOnce(&'a str) -> A + 'a,
+    input: &'a str,
     event: &str,
     quest: u8,
     part: u8,
-) {
+) where
+    <A as Answer>::Output: Display,
+    <A as Answer>::Error: Debug,
+{
     let event: Event = event.parse().expect("invalid event/story");
     let quest: Quest = quest.try_into().expect("invalid quest");
 
@@ -29,8 +32,8 @@ pub fn run_part<T: Display>(
     let result = func(input);
     let duration = timer.elapsed();
 
-    match &result {
-        Some(answer) => {
+    match result.unpack() {
+        Ok(answer) => {
             let answer_str = answer.to_string();
             if answer_str.contains('\n') {
                 println!("Part {part}: (multiline) ({duration:?})");
@@ -39,25 +42,45 @@ pub fn run_part<T: Display>(
                 print!("Part {part}: {ANSI_BOLD}{answer_str}{ANSI_RESET} ({duration:?})",);
 
                 // Check if we should submit and get response inline
-                if let Some(submission_info) = check_and_submit(&result, event, quest, part) {
+                if let Some(submission_info) = check_and_submit(&answer_str, event, quest, part) {
                     print!(" - {submission_info}");
                 }
 
                 println!();
             }
         }
-        None => {
-            println!("Part {part}: -");
+        Err(e) => {
+            println!("Part {part}: - ({e:?})");
         }
     }
 }
 
-fn check_and_submit<T: Display>(
-    result: &Option<T>,
-    event: Event,
-    quest: Quest,
-    part: u8,
-) -> Option<String> {
+pub trait Answer {
+    type Output;
+    type Error;
+
+    fn unpack(self) -> Result<Self::Output, Self::Error>;
+}
+
+impl<T> Answer for Option<T> {
+    type Output = T;
+    type Error = ();
+
+    fn unpack(self) -> Result<Self::Output, Self::Error> {
+        self.ok_or(())
+    }
+}
+
+impl<T, E> Answer for Result<T, E> {
+    type Output = T;
+    type Error = E;
+
+    fn unpack(self) -> Result<Self::Output, Self::Error> {
+        self
+    }
+}
+
+fn check_and_submit(result: &str, event: Event, quest: Quest, part: u8) -> Option<String> {
     let args: Vec<String> = env::args().collect();
 
     // Check if we should submit AND if this is the part to submit
@@ -73,10 +96,8 @@ fn check_and_submit<T: Display>(
         return None;
     }
 
-    let result = result.as_ref()?;
-
     match Client::try_new() {
-        Ok(client) => match client.submit_answer(event, quest, part, result.to_string()) {
+        Ok(client) => match client.submit_answer(event, quest, part, result) {
             Ok(response) => format_submission_response(&response),
             Err(e) => Some(format!(
                 "{}✗ Submission failed: {}{}",
