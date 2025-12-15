@@ -1,3 +1,5 @@
+use crate::Quest;
+use crate::ec::Event;
 use aes::Aes256;
 use aes::cipher::BlockDecryptMut;
 use block_padding::Pkcs7;
@@ -5,6 +7,7 @@ use cbc::{Decryptor, cipher::KeyIvInit};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
+use thiserror::Error;
 
 type Aes256CbcDec = Decryptor<Aes256>;
 
@@ -14,58 +17,40 @@ const BASE_URL: &str = "https://everybody.codes";
 // See https://www.reddit.com/r/everybodycodes/comments/1p75qfr/2025_please_update_your_tools/
 const CDN_URL: &str = "https://everybody.codes";
 
-#[derive(Debug)]
+#[derive(Error, Debug)]
 pub enum ClientError {
+    #[error("session not found")]
     SessionNotFound,
+    #[error("seed not configured")]
     SeedNotConfigured,
+    #[error("event/story not configured")]
     EventNotConfigured,
+    #[error("HTTP error: {0}")]
     HttpError(String),
+    #[error("Decryption error: {0}")]
     DecryptionError(String),
-    IoError(std::io::Error),
+    #[error("Reqwest error: {0}")]
+    ReqwestError(#[from] reqwest::Error),
+    #[error("IO error: {0}")]
+    IoError(#[from] std::io::Error),
 }
 
-impl From<std::io::Error> for ClientError {
-    fn from(err: std::io::Error) -> Self {
-        ClientError::IoError(err)
-    }
+#[derive(Debug, Deserialize)]
+struct EncryptedInput {
+    #[serde(rename = "1")]
+    part1_input: Option<String>,
+    #[serde(rename = "2")]
+    part2_input: Option<String>,
+    #[serde(rename = "3")]
+    part3_input: Option<String>,
 }
 
-impl std::fmt::Display for ClientError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ClientError::SessionNotFound => {
-                write!(
-                    f,
-                    "Session cookie not found. Please create ~/.ec-session with your session cookie value."
-                )
-            }
-            ClientError::SeedNotConfigured => {
-                write!(
-                    f,
-                    "EC_SEED not configured. Add it to .cargo/config.toml:\n[env]\nEC_SEED = \"your_seed_here\""
-                )
-            }
-            ClientError::EventNotConfigured => {
-                write!(
-                    f,
-                    "EC_EVENT not configured. Add it to .cargo/config.toml:\n[env]\nEC_EVENT = \"2024\""
-                )
-            }
-            ClientError::HttpError(msg) => write!(f, "HTTP error: {}", msg),
-            ClientError::DecryptionError(msg) => write!(f, "Decryption error: {}", msg),
-            ClientError::IoError(err) => write!(f, "IO error: {}", err),
-        }
-    }
-}
-
-impl std::error::Error for ClientError {}
-
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 struct UserResponse {
     seed: u32,
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 struct QuestResponse {
     #[serde(rename = "key1")]
     part1_key: Option<String>,
@@ -75,7 +60,7 @@ struct QuestResponse {
     part3_key: Option<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 struct AnswerPayload {
     answer: String,
 }
@@ -83,95 +68,73 @@ struct AnswerPayload {
 pub struct Client {
     session: String,
     seed: u32,
-    event: String,
     http_client: reqwest::blocking::Client,
 }
 
 impl Client {
-    pub fn new() -> Result<Self, ClientError> {
+    pub fn try_new() -> Result<Self, ClientError> {
         let session = Self::read_session()?;
-        let event = Self::get_event()?;
 
-        let http_client = reqwest::blocking::Client::builder()
-            .build()
-            .map_err(|e| ClientError::HttpError(e.to_string()))?;
+        let http_client = reqwest::blocking::Client::builder().build()?;
+
+        let mut client = Client {
+            session,
+            seed: 0, // Temporary value
+            http_client,
+        };
 
         // Check if seed needs to be fetched
-        let seed = match Self::get_seed() {
+        client.seed = match Self::get_seed() {
             Ok(s) => s,
             Err(_) => {
                 // Seed not configured or empty, fetch it from API
-                let temp_client = Client {
-                    session: session.clone(),
-                    seed: 0, // Temporary value
-                    event: event.clone(),
-                    http_client: http_client.clone(),
-                };
-                let fetched_seed = temp_client.fetch_user_seed()?;
-                println!(
-                    "\n INFO: Fetched your seed from the API: {}. You can ",
-                    fetched_seed
-                );
-                println!("You can add this to .cargo/config.toml to avoid fetching it each time:");
+                let fetched_seed = client.fetch_user_seed()?;
+                println!("\n INFO: Fetched your seed from the API: {fetched_seed}.",);
+                println!("You can add this to .cargo/config.toml to avoid fetching it each time.");
                 println!();
                 fetched_seed
             }
         };
 
-        Ok(Self {
-            session,
-            seed,
-            event,
-            http_client,
-        })
+        Ok(client)
     }
 
     fn read_session() -> Result<String, ClientError> {
-        let home = std::env::var("HOME").map_err(|_| ClientError::SessionNotFound)?;
-        let session_path = PathBuf::from(home).join(".ec-session");
+        for dir in [
+            PathBuf::new(),
+            std::env::home_dir().ok_or(ClientError::SessionNotFound)?,
+        ] {
+            let session_path = dir.join(".ec-session");
 
-        if !session_path.exists() {
-            return Err(ClientError::SessionNotFound);
+            if session_path.exists() {
+                let session = fs::read_to_string(session_path)?.trim().to_string();
+                return Ok(session);
+            }
         }
 
-        let session = fs::read_to_string(session_path)?.trim().to_string();
-
-        Ok(session)
+        Err(ClientError::SessionNotFound)
     }
 
     fn get_seed() -> Result<u32, ClientError> {
         let seed_str = std::env::var("EC_SEED").map_err(|_| ClientError::SeedNotConfigured)?;
+        let seed_str = seed_str.trim();
 
         // Check if it's just whitespace or empty
-        if seed_str.trim().is_empty() {
+        if seed_str.is_empty() {
             return Err(ClientError::SeedNotConfigured);
         }
 
-        seed_str
-            .trim()
-            .parse()
-            .map_err(|_| ClientError::SeedNotConfigured)
-    }
-
-    fn get_event() -> Result<String, ClientError> {
-        std::env::var("EC_EVENT").map_err(|_| ClientError::EventNotConfigured)
+        seed_str.parse().map_err(|_| ClientError::SeedNotConfigured)
     }
 
     pub fn fetch_user_seed(&self) -> Result<u32, ClientError> {
-        let url = format!("{}/api/user/me", BASE_URL);
+        let url = format!("{BASE_URL}/api/user/me");
         let response = self
             .http_client
             .get(&url)
             .header("Cookie", format!("everybody-codes={}", self.session))
-            .send()
-            .map_err(|e| ClientError::HttpError(e.to_string()))?;
-
-        if !response.status().is_success() {
-            return Err(ClientError::HttpError(format!(
-                "Status: {}",
-                response.status()
-            )));
-        }
+            .send()?
+            .error_for_status()?;
 
         let user: UserResponse = response
             .json()
@@ -180,59 +143,52 @@ impl Client {
         Ok(user.seed)
     }
 
-    pub fn fetch_encrypted_input(&self, quest: u8, part: u8) -> Result<String, ClientError> {
+    pub fn fetch_encrypted_input(
+        &self,
+        event: Event,
+        quest: Quest,
+        part: u8,
+    ) -> Result<String, ClientError> {
         let url = format!(
-            "{}/assets/{}/{}/input/{}.json",
-            CDN_URL, self.event, quest, self.seed
+            "{CDN_URL}/assets/{}/{}/input/{}.json",
+            event.as_u32(),
+            quest.as_u8(),
+            self.seed
+        );
+
+        let response = self.http_client.get(&url).send()?.error_for_status()?;
+        let inputs: EncryptedInput = response.json()?;
+
+        let encrypted = match part {
+            1 => inputs.part1_input,
+            2 => inputs.part2_input,
+            3 => inputs.part3_input,
+            _ => None,
+        };
+        encrypted
+            .ok_or_else(|| ClientError::HttpError(format!("Part {part} not found in response")))
+    }
+
+    pub fn fetch_decryption_key(
+        &self,
+        event: Event,
+        quest: Quest,
+        part: u8,
+    ) -> Result<String, ClientError> {
+        let url = format!(
+            "{BASE_URL}/api/event/{}/quest/{}",
+            event.as_u32(),
+            quest.as_u8()
         );
 
         let response = self
             .http_client
             .get(&url)
-            .send()
-            .map_err(|e| ClientError::HttpError(e.to_string()))?;
-
-        if !response.status().is_success() {
-            return Err(ClientError::HttpError(format!(
-                "Status: {}",
-                response.status()
-            )));
-        }
-
-        let inputs: serde_json::Value = response
-            .json()
-            .map_err(|e| ClientError::HttpError(e.to_string()))?;
-
-        let encrypted = inputs
-            .get(part.to_string())
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| {
-                ClientError::HttpError(format!("Part {} not found in response", part))
-            })?;
-
-        Ok(encrypted.to_string())
-    }
-
-    pub fn fetch_decryption_key(&self, quest: u8, part: u8) -> Result<String, ClientError> {
-        let url = format!("{}/api/event/{}/quest/{}", BASE_URL, self.event, quest);
-
-        let response = self
-            .http_client
-            .get(&url)
             .header("Cookie", format!("everybody-codes={}", self.session))
-            .send()
-            .map_err(|e| ClientError::HttpError(e.to_string()))?;
+            .send()?
+            .error_for_status()?;
 
-        if !response.status().is_success() {
-            return Err(ClientError::HttpError(format!(
-                "Status: {}",
-                response.status()
-            )));
-        }
-
-        let quest_data: QuestResponse = response
-            .json()
-            .map_err(|e| ClientError::HttpError(e.to_string()))?;
+        let quest_data: QuestResponse = response.json()?;
 
         let key = match part {
             1 => quest_data.part1_key,
@@ -243,8 +199,7 @@ impl Client {
 
         key.ok_or_else(|| {
             ClientError::HttpError(format!(
-                "Key for part {} not available (possibly not solved yet)",
-                part
+                "Key for part {part} not available (possibly not solved yet)"
             ))
         })
     }
@@ -266,26 +221,38 @@ impl Client {
         let mut encrypted_clone = encrypted_bytes.clone();
         let decrypted = Aes256CbcDec::new(key_bytes.into(), iv_bytes.into())
             .decrypt_padded_mut::<Pkcs7>(&mut encrypted_clone)
-            .map_err(|e| ClientError::DecryptionError(format!("Decryption failed: {:?}", e)))?;
+            .map_err(|e| ClientError::DecryptionError(format!("Decryption failed: {e:?}")))?;
 
         String::from_utf8(decrypted.to_vec())
             .map_err(|e| ClientError::DecryptionError(e.to_string()))
     }
 
-    pub fn fetch_and_decrypt_input(&self, quest: u8, part: u8) -> Result<String, ClientError> {
-        let encrypted = self.fetch_encrypted_input(quest, part)?;
-        let key = self.fetch_decryption_key(quest, part)?;
+    pub fn fetch_and_decrypt_input(
+        &self,
+        event: Event,
+        quest: Quest,
+        part: u8,
+    ) -> Result<String, ClientError> {
+        let encrypted = self.fetch_encrypted_input(event, quest, part)?;
+        let key = self.fetch_decryption_key(event, quest, part)?;
         self.decrypt_input(&encrypted, &key)
     }
 
-    pub fn submit_answer(&self, quest: u8, part: u8, answer: &str) -> Result<String, ClientError> {
+    pub fn submit_answer(
+        &self,
+        event: Event,
+        quest: Quest,
+        part: u8,
+        answer: impl Into<String>,
+    ) -> Result<String, ClientError> {
         let url = format!(
-            "{}/api/event/{}/quest/{}/part/{}/answer",
-            BASE_URL, self.event, quest, part
+            "{BASE_URL}/api/event/{}/quest/{}/part/{part}/answer",
+            event.as_u32(),
+            quest.as_u8()
         );
 
         let payload = AnswerPayload {
-            answer: answer.to_string(),
+            answer: answer.into(),
         };
 
         let response = self
@@ -293,29 +260,13 @@ impl Client {
             .post(&url)
             .header("Cookie", format!("everybody-codes={}", self.session))
             .json(&payload)
-            .send()
-            .map_err(|e| ClientError::HttpError(e.to_string()))?;
+            .send()?
+            .error_for_status()?;
 
-        let status = response.status();
-        let body = response
-            .text()
-            .map_err(|e| ClientError::HttpError(e.to_string()))?;
-
-        if status.is_success() {
-            Ok(body)
-        } else {
-            Err(ClientError::HttpError(format!(
-                "Submit failed ({}): {}",
-                status, body
-            )))
-        }
+        Ok(response.text()?)
     }
 
     pub fn seed(&self) -> u32 {
         self.seed
-    }
-
-    pub fn event(&self) -> &str {
-        &self.event
     }
 }

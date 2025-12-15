@@ -1,3 +1,5 @@
+use crate::ec::Event;
+use crate::{Client, Quest};
 use std::env;
 use std::fmt::Display;
 use std::time::Instant;
@@ -7,7 +9,16 @@ pub const ANSI_RESET: &str = "\x1b[0m";
 pub const ANSI_GREEN: &str = "\x1b[32m";
 pub const ANSI_RED: &str = "\x1b[31m";
 
-pub fn run_part<T: Display>(func: impl Fn(&str) -> Option<T>, input: &str, quest: u8, part: u8) {
+pub fn run_part<T: Display>(
+    func: impl FnOnce(&str) -> Option<T>,
+    input: &str,
+    event: &str,
+    quest: u8,
+    part: u8,
+) {
+    let event: Event = event.parse().expect("invalid event/story");
+    let quest: Quest = quest.try_into().expect("invalid quest");
+
     // Print result inline
     if input.is_empty() {
         println!("Part {}: -", part);
@@ -22,29 +33,31 @@ pub fn run_part<T: Display>(func: impl Fn(&str) -> Option<T>, input: &str, quest
         Some(answer) => {
             let answer_str = answer.to_string();
             if answer_str.contains('\n') {
-                println!("Part {}: (multiline) ({:?})", part, duration);
+                println!("Part {part}: (multiline) ({duration:?})");
                 println!("{}", answer_str);
             } else {
-                print!(
-                    "Part {}: {}{}{} ({:?})",
-                    part, ANSI_BOLD, answer_str, ANSI_RESET, duration
-                );
+                print!("Part {part}: {ANSI_BOLD}{answer_str}{ANSI_RESET} ({duration:?})",);
 
                 // Check if we should submit and get response inline
-                if let Some(submission_info) = check_and_submit(&result, quest, part) {
-                    print!(" - {}", submission_info);
+                if let Some(submission_info) = check_and_submit(&result, event, quest, part) {
+                    print!(" - {submission_info}");
                 }
 
                 println!();
             }
         }
         None => {
-            println!("Part {}: -", part);
+            println!("Part {part}: -");
         }
     }
 }
 
-fn check_and_submit<T: Display>(result: &Option<T>, quest: u8, part: u8) -> Option<String> {
+fn check_and_submit<T: Display>(
+    result: &Option<T>,
+    event: Event,
+    quest: Quest,
+    part: u8,
+) -> Option<String> {
     let args: Vec<String> = env::args().collect();
 
     // Check if we should submit AND if this is the part to submit
@@ -62,15 +75,15 @@ fn check_and_submit<T: Display>(result: &Option<T>, quest: u8, part: u8) -> Opti
 
     let result = result.as_ref()?;
 
-    match super::client::Client::new() {
-        Ok(client) => match client.submit_answer(quest, part, &result.to_string()) {
+    match Client::try_new() {
+        Ok(client) => match client.submit_answer(event, quest, part, result.to_string()) {
             Ok(response) => format_submission_response(&response),
             Err(e) => Some(format!(
                 "{}✗ Submission failed: {}{}",
                 ANSI_RED, e, ANSI_RESET
             )),
         },
-        Err(e) => Some(format!("{}✗ Client error: {}{}", ANSI_RED, e, ANSI_RESET)),
+        Err(e) => Some(format!("{ANSI_RED}✗ Client error: {e}{ANSI_RESET}")),
     }
 }
 
@@ -83,12 +96,12 @@ fn format_submission_response(response: &str) -> Option<String> {
             .unwrap_or(false);
 
         if correct {
-            let mut parts = vec![format!("{}✓ Correct answer!{}", ANSI_GREEN, ANSI_RESET)];
+            let mut parts = vec![format!("{ANSI_GREEN}✓ Correct answer!{ANSI_RESET}")];
 
-            if let Some(global_place) = json.get("globalPlace").and_then(|v| v.as_i64()) {
-                if global_place > 0 {
-                    parts.push(format!("Global rank: #{}", global_place));
-                }
+            if let Some(global_place) = json.get("globalPlace").and_then(|v| v.as_i64())
+                && global_place > 0
+            {
+                parts.push(format!("Global rank: #{}", global_place));
             }
 
             Some(parts.join(" - "))

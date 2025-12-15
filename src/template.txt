@@ -1,4 +1,4 @@
-ec::solution!(%QUEST_NUMBER%);
+ec::solution!(%EVENT%, %QUEST_NUMBER%);
 
 #[allow(unused_variables)]
 pub fn part_one(notes: &str) -> Option<String> {
@@ -22,19 +22,19 @@ mod tests {
 
     #[test]
     fn test_part_one() {
-        let result = part_one(&read_example_file(%QUEST_NUMBER%, 1));
+        let result = part_one(&read_example_file(EVENT, QUEST, 1));
         assert_eq!(result, None);
     }
 
     #[test]
     fn test_part_two() {
-        let result = part_two(&read_example_file(%QUEST_NUMBER%, 2));
+        let result = part_two(&read_example_file(EVENT, QUEST, 2));
         assert_eq!(result, None);
     }
 
     #[test]
     fn test_part_three() {
-        let result = part_three(&read_example_file(%QUEST_NUMBER%, 3));
+        let result = part_three(&read_example_file(EVENT, QUEST, 3));
         assert_eq!(result, None);
     }
 }
