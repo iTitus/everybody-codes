@@ -1,0 +1,40 @@
+ec::solution!("e2025", 1);
+
+#[allow(unused_variables)]
+pub fn part_one(notes: &str) -> Option<String> {
+    None
+}
+
+#[allow(unused_variables)]
+pub fn part_two(notes: &str) -> Option<String> {
+    None
+}
+
+#[allow(unused_variables)]
+pub fn part_three(notes: &str) -> Option<String> {
+    None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ec::read_example_file;
+
+    #[test]
+    fn test_part_one() {
+        let result = part_one(&read_example_file(EVENT, QUEST, 1));
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_part_two() {
+        let result = part_two(&read_example_file(EVENT, QUEST, 2));
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_part_three() {
+        let result = part_three(&read_example_file(EVENT, QUEST, 3));
+        assert_eq!(result, None);
+    }
+}
