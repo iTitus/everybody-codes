@@ -1,17 +1,22 @@
-use std::{env, fs};
+use itertools::Itertools;
+use std::env;
+use std::fs::File;
+use std::io::{BufRead, BufReader};
 
 /// Helper function that reads an input file to a string.
-/// Returns an empty string if the file doesn't exist.
 #[must_use]
 pub fn read_input_file(event: impl AsRef<str>, quest: u8, part: u8) -> String {
     let event = event.as_ref();
     let cwd = env::current_dir().unwrap();
-    let filepath = cwd
+    let path = cwd
         .join("inputs")
         .join("notes")
         .join(format!("{event}-{quest:02}-{part}.txt"));
 
-    fs::read_to_string(&filepath).unwrap_or_default()
+    let r = BufReader::new(File::open(path).expect("could not open input file"));
+    r.lines()
+        .map(|l| l.expect("could not read input file"))
+        .join("\n")
 }
 
 /// Helper function that reads an example file to a string.
@@ -19,11 +24,15 @@ pub fn read_input_file(event: impl AsRef<str>, quest: u8, part: u8) -> String {
 pub fn read_example_file(event: impl AsRef<str>, quest: u8, part: u8) -> String {
     let event = event.as_ref();
     let cwd = env::current_dir().unwrap();
-    let filepath = cwd
+    let path = cwd
         .join("inputs")
         .join("examples")
         .join(format!("{event}-{quest:02}-{part}.txt"));
-    fs::read_to_string(filepath).expect("could not open example file")
+
+    let r = BufReader::new(File::open(path).expect("could not open example file"));
+    r.lines()
+        .map(|l| l.expect("could not read example file"))
+        .join("\n")
 }
 
 /// Creates the solution macro for quest binaries
