@@ -1,9 +1,9 @@
 use crate::Quest;
 use crate::ec::Event;
 use aes::Aes256;
-use aes::cipher::BlockDecryptMut;
 use block_padding::Pkcs7;
-use cbc::{Decryptor, cipher::KeyIvInit};
+use cbc::Decryptor;
+use cbc::cipher::{BlockModeDecrypt, KeyIvInit};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
@@ -11,7 +11,7 @@ use thiserror::Error;
 
 type Aes256CbcDec = Decryptor<Aes256>;
 
-const BASE_URL: &str = "https://everybody.codes";
+const API_URL: &str = "https://api.everybody.codes";
 
 // Due to CDN issues, it was advised to not use the CDN URL anymore.
 // See https://www.reddit.com/r/everybodycodes/comments/1p75qfr/2025_please_update_your_tools/
@@ -128,7 +128,7 @@ impl Client {
     }
 
     pub fn fetch_user_seed(&self) -> Result<u32, ClientError> {
-        let url = format!("{BASE_URL}/api/user/me");
+        let url = format!("{API_URL}/user/me");
         let response = self
             .http_client
             .get(&url)
@@ -158,6 +158,7 @@ impl Client {
 
         let response = self.http_client.get(&url).send()?.error_for_status()?;
         let inputs: EncryptedInput = response.json()?;
+        println!("Got encrypted input");
 
         let encrypted = match part {
             1 => inputs.part1_input,
@@ -176,7 +177,7 @@ impl Client {
         part: u8,
     ) -> Result<String, ClientError> {
         let url = format!(
-            "{BASE_URL}/api/event/{}/quest/{}",
+            "{API_URL}/event/{}/quest/{}",
             event.as_u32(),
             quest.as_u8()
         );
@@ -219,8 +220,9 @@ impl Client {
         let iv_bytes = &key_bytes[..16];
 
         let mut encrypted_clone = encrypted_bytes.clone();
-        let decrypted = Aes256CbcDec::new(key_bytes.into(), iv_bytes.into())
-            .decrypt_padded_mut::<Pkcs7>(&mut encrypted_clone)
+        let decrypted = Aes256CbcDec::new_from_slices(key_bytes, iv_bytes)
+            .map_err(|e| ClientError::DecryptionError(format!("Decryption failed: {e:?}")))?
+            .decrypt_padded::<Pkcs7>(&mut encrypted_clone)
             .map_err(|e| ClientError::DecryptionError(format!("Decryption failed: {e:?}")))?;
 
         String::from_utf8(decrypted.to_vec())
@@ -246,7 +248,7 @@ impl Client {
         answer: impl Into<String>,
     ) -> Result<String, ClientError> {
         let url = format!(
-            "{BASE_URL}/api/event/{}/quest/{}/part/{part}/answer",
+            "{API_URL}/event/{}/quest/{}/part/{part}/answer",
             event.as_u32(),
             quest.as_u8()
         );

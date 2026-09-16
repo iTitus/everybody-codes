@@ -91,7 +91,7 @@ pub fn scaffold_quest(
             .replace("%EVENT%", &format!("\"{event}\""))
             .replace("%QUEST_NUMBER%", &quest.as_u8().to_string());
         fs::write(&quest_file, content)?;
-        println!("Created [\x1b[0;32m {} \x1b[0m]", quest_file.display());
+        println!("Created quest file [\x1b[0;32m {} \x1b[0m]", quest_file.display());
     } else {
         println!("Quest file already exists: {}", quest_file.display());
     }
@@ -100,7 +100,7 @@ pub fn scaffold_quest(
     let input_file = PathBuf::from(format!("inputs/notes/{event}-{quest:02}-{part}.txt"));
     if !input_file.exists() {
         fs::write(&input_file, input_content)?;
-        println!("Created [\x1b[0;32m {} \x1b[0m]", input_file.display());
+        println!("Created note file [\x1b[0;32m {} \x1b[0m]", input_file.display());
     } else {
         println!("Input file already exists: {}", input_file.display());
     }
@@ -109,7 +109,7 @@ pub fn scaffold_quest(
     let example_file = PathBuf::from(format!("inputs/examples/{event}-{quest:02}-{part}.txt"));
     if !example_file.exists() {
         fs::write(&example_file, "")?;
-        println!("Created [\x1b[0;32m {} \x1b[0m]", example_file.display());
+        println!("Created empty example file [\x1b[0;32m {} \x1b[0m]", example_file.display());
     } else {
         println!("Example file already exists: {}", example_file.display());
     }

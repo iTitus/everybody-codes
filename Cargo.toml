@@ -6,16 +6,16 @@ authors = ["iTitus"]
 default-run = "ec"
 
 [dependencies]
-clap = { version = "4.2.7", features = ["derive"] }
-reqwest = { version = "0.12", features = ["blocking", "cookies", "json"] }
+clap = { version = "4.6", features = ["derive"] }
+reqwest = { version = "0.13", features = ["blocking", "cookies", "json"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 thiserror = "2"
-aes = "0.8"
-cbc = "0.1"
+aes = "0.9"
+cbc = "0.2"
 hex = "0.4"
-block-padding = "0.3" # keep in sync with crypto deps
-itertools = "0.14"
+block-padding = "0.4" # keep in sync with crypto deps
+itertools = "0.15"
 
 [dev-dependencies]
 pretty_assertions = "1"
