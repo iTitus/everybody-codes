@@ -38,7 +38,6 @@ pub fn part_one(notes: &str) -> Result<String, Box<dyn Error>> {
     Ok(names[pos as usize].clone())
 }
 
-#[allow(unused_variables)]
 pub fn part_two(notes: &str) -> Result<String, Box<dyn Error>> {
     let (names, instructions) = parse(notes)?;
     let count = names.len() as isize;
@@ -51,7 +50,6 @@ pub fn part_two(notes: &str) -> Result<String, Box<dyn Error>> {
     Ok(names[pos as usize].clone())
 }
 
-#[allow(unused_variables)]
 pub fn part_three(notes: &str) -> Result<String, Box<dyn Error>> {
     let (mut names, instructions) = parse(notes)?;
     let count = names.len() as isize;

@@ -39,16 +39,16 @@ pub fn read_example_file(event: impl AsRef<str>, quest: u8, part: u8) -> String 
 #[macro_export]
 macro_rules! solution {
     ($event:expr, $quest:expr) => {
-        $crate::solution!(@impl $event, $quest, [part_one, 1] [part_two, 2] [part_three, 3]);
+        $crate::solution!($event, $quest, 3);
     };
     ($event:expr, $quest:expr, 1) => {
         $crate::solution!(@impl $event, $quest, [part_one, 1]);
     };
     ($event:expr, $quest:expr, 2) => {
-        $crate::solution!(@impl $event, $quest, [part_two, 2]);
+        $crate::solution!(@impl $event, $quest, [part_one, 1] [part_two, 2]);
     };
     ($event:expr, $quest:expr, 3) => {
-        $crate::solution!(@impl $event, $quest, [part_three, 3]);
+        $crate::solution!(@impl $event, $quest, [part_one, 1] [part_two, 2] [part_three, 3]);
     };
 
     (@impl $event:expr, $quest:expr, $( [$func:expr, $part:expr] )*) => {
