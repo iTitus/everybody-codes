@@ -16,6 +16,7 @@ cbc = "0.2"
 hex = "0.4"
 block-padding = "0.4" # keep in sync with crypto deps
 itertools = "0.15"
+num = "0.4"
 
 [dev-dependencies]
 pretty_assertions = "1"
