@@ -176,11 +176,7 @@ impl Client {
         quest: Quest,
         part: u8,
     ) -> Result<String, ClientError> {
-        let url = format!(
-            "{API_URL}/event/{}/quest/{}",
-            event.as_u32(),
-            quest.as_u8()
-        );
+        let url = format!("{API_URL}/event/{}/quest/{}", event.as_u32(), quest.as_u8());
 
         let response = self
             .http_client

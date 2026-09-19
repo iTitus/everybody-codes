@@ -8,4 +8,4 @@ pub use client::Client;
 pub use event::Event;
 pub use quest::Quest;
 pub use runner::run_part;
-pub use solution_macro::{read_example_file, read_input_file};
+pub use solution_macro::{read_example_file, read_input_file, read_numbered_example_file};

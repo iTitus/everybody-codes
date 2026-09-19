@@ -35,6 +35,27 @@ pub fn read_example_file(event: impl AsRef<str>, quest: u8, part: u8) -> String 
         .join("\n")
 }
 
+/// Helper function that reads a numbered example file to a string.
+#[must_use]
+pub fn read_numbered_example_file(
+    event: impl AsRef<str>,
+    quest: u8,
+    part: u8,
+    number: u8,
+) -> String {
+    let event = event.as_ref();
+    let cwd = env::current_dir().unwrap();
+    let path = cwd
+        .join("inputs")
+        .join("examples")
+        .join(format!("{event}-{quest:02}-{part}-{number}.txt"));
+
+    let r = BufReader::new(File::open(path).expect("could not open example file"));
+    r.lines()
+        .map(|l| l.expect("could not read example file"))
+        .join("\n")
+}
+
 /// Creates the solution macro for quest binaries
 #[macro_export]
 macro_rules! solution {
